@@ -296,7 +296,12 @@ def mrna_from_protein(protein):
         'K': 2, 'V': 4, 'A': 4, 'D': 2, 'E': 2,
         'G': 4
     }
-    return codon_table['*'] * 3 % 1000000
+    total_rna = 1
+    # Attach the * to the protein sequence
+    protein += '*'
+    for aa in protein:
+        total_rna *= codon_table[aa]
+    return total_rna % 1000000
 
 # Problem 17 - ORF Open Reading Frames
 def find_orfs(dna):
@@ -308,16 +313,31 @@ def find_orfs(dna):
         list: The open reading frames in the DNA sequence
     """
     dna = dna.upper()
+    dna_rc = reverse_complement(dna)
     start_codon = 'ATG'
     stop_codons = ['TAA', 'TAG', 'TGA']
     orfs = []
     for i in range(len(dna) - 2):
+        # Find orf on the sense strand
         if dna[i:i+3] == start_codon:
             for j in range(i + 3, len(dna), 3):
                 if dna[j:j+3] in stop_codons:
                     orfs.append(dna[i:j])
                     break
-    return orfs
+        # Find orf on the antisense strand
+        if dna_rc[i:i+3] == start_codon:
+            for j in range(i + 3, len(dna_rc), 3):
+                if dna_rc[j:j+3] in stop_codons:
+                    orfs.append(dna_rc[i:j])
+    # Deduplicate the list of orfs
+    orfs = list(set(orfs))
+    # Translate the DNA sequence to protein
+    proteins = []
+    for orf in orfs:
+        proteins.append(rnaTranslate(transcribe_dna_to_rna(orf)))
+    # Deduplicate the list of proteins
+    proteins = list(set(proteins))
+    return orfs, proteins
 
 # Problem 18 - Enumerating Gene Orders
 def enumerate_gene_orders(n):
@@ -347,7 +367,8 @@ def protein_mass(protein):
         'P': 97.05276, 'Q': 128.05858, 'R': 156.10111, 'S': 87.03203,
         'T': 101.04768, 'V': 99.06841, 'W': 186.07931, 'Y': 163.06333
     }
-    return sum([mass_table[aa] for aa in protein])
+    mass = sum([mass_table[aa] for aa in protein]).__round__(3)
+    return mass
 
 # Problem 20 - Locating Restriction Sites
 def find_restriction_sites(dna):
@@ -356,19 +377,32 @@ def find_restriction_sites(dna):
     Args:
         dna (str): The input DNA sequence.
     Returns:
-        list: The locations of the reverse palindromic restriction sites in the DNA sequence.
+        list: The locations of the reverse palindromic restriction sites in the DNA sequence,
+        having length between 4 and 12.
     """
     dna = dna.upper()
     revcomp = reverse_complement(dna)
     sites = []
-    for i in range(len(dna)):
+    # Check specifically for position 1
+    for j in range(4, 13):
+        if dna[0:j] == dna[-1:-(j+1):-1]:
+            sites.append((1, j))
+    # Check for all other positions
+    for i in range(0, len(dna), 1):
         for j in range(4, 13):
             if i + j > len(dna):
                 break
             if dna[i:i+j] == revcomp[-(i+j):-(i)]:
-                sites.append((i + 1, j))
-    return sites
+                if dna[0:j] == revcomp[-(i+j):-(i)]: # Check if the site is a reverse palindrome of the start sequence position
+                    sites.append((1, j))
+                sites.append((i + 1, len(dna[i:i+j])))
+    # deduplicate the list of sites
+    sites = list(set(sites))
+    # Sort according to the starting position
+    sites.sort(key=lambda x: x[0])
+    formatted_sites = '\n'.join([f'{site[0]} {site[1]}' for site in sites])
 
+    return sites, formatted_sites   
 # Problem 21 - RNA Splicing
 def rna_splicing(dna, introns):
     """
@@ -382,3 +416,379 @@ def rna_splicing(dna, introns):
     for intron in introns:
         dna = dna.replace(intron, '')
     return transcribe_dna_to_rna(dna)
+
+# Problem 22 - Introduction to Random Strings
+def random_string_probability(dna, gc_content):
+    """
+    Computes the probability of a random string having the given GC content.
+    Args:
+        dna (str): The input DNA sequence.
+        gc_content (float): The GC content of the random string.
+    Returns:
+        float: The probability of a random string having the given GC content.
+    """
+    import math
+    gc_prob = gc_content / 2
+    at_prob = (1 - gc_content) / 2
+    prob = 1
+    for base in dna:
+        if base in 'GC':
+            prob *= gc_prob
+        else:
+            prob *= at_prob
+    # Convert the probability to logaritmic form
+    log_prob = math.log10(prob)
+    # format to 3 decimal places and trailing zeros
+    log_prob = "{:.3f}".format(log_prob)
+    return log_prob
+
+# Problem 23 - Overlap Graphs
+def is_overlap_graphs(dna1, dna2, n):
+    """
+    Checks if two DNA sequences overlap with each other.
+    Args:
+        dna1 (str): The first DNA sequence.
+        dna2 (str): The second DNA sequence.
+        n (int): The length of the overlap.
+    Returns:
+        bool: True if the DNA sequences overlap, False otherwise.
+    """
+    return dna1[-n:] == dna2[:n]
+
+# Problem 24 - Enumerating k-mers Lexicographically
+def enumerate_kmers_lexicographically(alphabet, n):
+    """
+    Enumerates all possible k-mers of a given alphabet and length lexicographically.
+    Args:
+        alphabet (str): The alphabet to use for the k-mers.
+        n (int): The length of the k-mers.
+    Returns:
+        list: A list of all possible k-mers of the given alphabet and length.
+    """
+    from itertools import product
+    kmers = [''.join(kmer) for kmer in product(alphabet, repeat=n)]
+    return kmers
+
+# Problem 25 - Longest Increasing Subsequence
+def longest_increasing_subsequence(sequence):
+    """
+    Computes the longest increasing subsequence of a sequence of numbers.
+    Args:
+        sequence (list): A list of numbers.
+    Returns:
+        list: The longest increasing subsequence of the sequence.
+    """
+    n = len(sequence)
+    lis = [1] * n
+    for i in range(1, n):
+        for j in range(0, i):
+            if sequence[i] > sequence[j]:
+                lis[i] = max(lis[i], lis[j] + 1)
+    length = max(lis)
+    subsequence = []
+    for i in range(n - 1, -1, -1):
+        if lis[i] == length:
+            subsequence.append(sequence[i])
+            length -= 1
+    subsequence.reverse()
+    return subsequence
+def longest_decreasing_subsequence(sequence):
+    """
+    Computes the longest decreasing subsequence of a sequence of numbers.
+    Args:
+        sequence (list): A list of numbers.
+    Returns:
+        list: The longest decreasing subsequence of the sequence.
+    """
+    n = len(sequence)
+    lds = [1] * n
+    for i in range(1, n):
+        for j in range(0, i):
+            if sequence[i] < sequence[j]:
+                lds[i] = max(lds[i], lds[j] + 1)
+    length = max(lds)
+    subsequence = []
+    for i in range(n - 1, -1, -1):
+        if lds[i] == length:
+            subsequence.append(sequence[i])
+            length -= 1
+    subsequence.reverse()
+    return subsequence
+
+# Problem 26 - Genome Assembly as Shortest Superstring
+def shortest_superstring(dnas):
+    """
+    Computes the shortest superstring that contains all the given DNA sequences.
+    Args:
+        dnas (list): A list of DNA sequences.
+    Returns:
+        str: The shortest superstring that contains all the DNA sequences.
+    Note: Only gluing pairs of strings that overlap by at least half of their length.
+    """
+    def overlap(a, b):
+        """
+        Computes the overlap between two strings.
+        Args:
+            a (str): The first string.
+            b (str): The second string.
+        Returns:
+            int: The overlap between the two strings.
+        """
+        max_overlap = 0
+        for i in range(1, len(a)):
+            if b.startswith(a[i:]):
+                max_overlap = len(a) - i
+                break
+        return max_overlap
+
+    while len(dnas) > 1:
+        max_overlap = -1
+        best_pair = (0, 0)
+        best_string = ""
+        
+        for i in range(len(dnas)):
+            for j in range(len(dnas)):
+                if i != j:
+                    ov = overlap(dnas[i], dnas[j])
+                    if ov > max_overlap:
+                        max_overlap = ov
+                        best_pair = (i, j)
+                        best_string = dnas[i] + dnas[j][ov:]
+        
+        i, j = best_pair
+        # Remove the string with higher index first
+        # Remove the string with the higher index first
+        if i > j:
+            dnas.pop(i)
+            dnas[j] = best_string
+        else:
+            dnas.pop(j)
+            dnas[i] = best_string
+        print(f'Merging strings {i if i > j else j} with {j if i > j else i} with overlap {max_overlap}')
+
+    return dnas[0]
+
+# Problem 27 - Perfect Matchings and RNA Secondary Structures
+def perfect_matchings(rna):
+    """
+    Computes the number of perfect matchings in an RNA sequence.
+    Args:
+        rna (str): The input RNA sequence.
+    Returns:
+        int: The number of perfect matchings in the RNA sequence.
+    """
+    from math import factorial
+    au = rna.count('A')
+    gc = rna.count('G')
+    return factorial(au) * factorial(gc)
+
+# Problem 28 - Partial Permutations
+def partial_permutations(n, k):
+    """
+    Computes the number of partial permutations of k elements from a set of n elements.
+    Args:
+        n (int): The total number of elements in the set.
+        k (int): The number of elements to permute.
+    Returns:
+        int: The number of partial permutations of k elements from a set of n elements.
+    """
+    from math import factorial
+    return (factorial(n) // factorial
+            (n - k)) % 1000000
+
+# Problem 29 - Enumerating Oriented Gene Orderings
+def enumerate_oriented_gene_orderings(n):
+    """
+    Enumerates all possible oriented gene orderings of a list of numbers.
+    Args:
+        n (int): The number of elements in the list.
+    Returns:
+        list: A list of all possible oriented gene orderings of the list.
+    """
+    from itertools import permutations
+    from itertools import product
+    orientations = ['+', '-']
+    permutations = list(permutations(range(1, n + 1)))
+    oriented_permutations = []
+    for perm in permutations:
+        for orientation in product(orientations, repeat=n):
+            # Append as a positive or negative number based on the orientation
+            oriented_permutations.append(' '.join([f'{o}{p}' for o, p in zip(orientation , perm)]))
+    return oriented_permutations
+
+# Problem 30 - Finding a Spliced Motif
+def find_spliced_motif(dna, motif):
+    """
+    Finds the locations of a motif in a DNA sequence after splicing out the introns.
+    Args:
+        dna (str): The input DNA sequence.
+        motif (str): The motif to search for.
+    Returns:
+        list: The starting positions of the motif in the DNA sequence after splicing out the introns.
+    """
+    start = 0
+    positions = []
+    for base in motif:
+        pos = dna.find(base, start)
+        if pos == -1:
+            return positions
+        positions.append(pos + 1)
+        start = pos + 1
+    return positions
+
+# Problem 31 - Transitions and Transversions
+def transitions_transversions(dna1, dna2):
+    """
+    Computes the ratio of transitions to transversions between two DNA sequences.
+    Args:
+        dna1 (str): The first DNA sequence.
+        dna2 (str): The second DNA sequence.
+    Returns:
+        float: The ratio of
+    """
+    transitions = 0
+    transversions = 0
+    for i in range(len(dna1)):
+        if dna1[i] == dna2[i]:
+            continue
+        if dna1[i] in 'AG' and dna2[i] in 'AG':
+            transitions += 1
+        elif dna1[i] in 'CT' and dna2[i] in 'CT':
+            transitions += 1
+        else:
+            transversions += 1
+    return transitions / transversions
+
+# Problem 32 - Completing a Tree
+def completing_tree(n, edges):
+    """
+    Computes the number of edges required to complete a tree with n nodes.
+    Args:
+        n (int): The number of nodes in the tree.
+        edges (list): A list of edges in the tree.
+    Returns:
+        int: The number of edges required to complete the tree.
+    """
+    return n - len(edges) - 1
+
+# Problem 33 - Catalan Numbers and RNA Secondary Structures
+def get_catalan_numbers(s, nodes, catalan_memo={}):
+    n = int(nodes/2)
+    if n <= 1:
+        return 1
+    if catalan_memo.get((s, nodes),0):
+        return catalan_memo[(s, nodes)]
+    Cn = 0
+    for k in range(1, 2*n, 2):
+        a, u, c, g = s[1:k].count("A"), s[1:k].count("U"), s[1:k].count("C"), s[1:k].count("G")
+        if a==u and c==g and (s[0], s[k]) in [("A", "U"), ("U", "A"), ("C", "G"), ("G", "C")]:
+            Cn += get_catalan_numbers(s[1:k], k-1, catalan_memo) * get_catalan_numbers(s[k+1:], 2*n-k-1, catalan_memo)
+    #  Memorize calculated Catalan Numbers values
+    catalan_memo[(s, nodes)] = Cn
+    return Cn
+# Problem 35 - Counting Phylogenetic Ancestors
+def count_phylogenetic_ancestors(n):
+    """
+    Computes the number of internal nodes in a phylogenetic tree with n leaves.
+    Args:
+        n (int): The number of leaves in the phylogenetic tree.
+    Returns:
+        int: The number of internal nodes in the phylogenetic tree.
+    """
+    return n - 2
+
+# Problem 36 - k-Mer Composition
+def kmer_composition(dna, k):
+    """
+    Computes the k-mer composition of a DNA sequence.
+    Args:
+        dna (str): The input DNA sequence.
+        k (int): The length of the k-mers.
+    Returns:
+        dict: The k-mers in the DNA sequence and their frequencies.
+    """
+    # Prepare a dict of k-mers from A, T, G, C and their frequencies = 0 initially, sorted lexicographically    
+    kmers = enumerate_kmers_lexicographically('ATGC', k)
+    kmer_freq = {kmer: 0 for kmer in kmers}
+    for i in range(len(dna) - k + 1):
+        # Increment the frequency of the k-mer in the dict
+        kmer_freq[dna[i:i + k]] += 1
+    return kmer_freq
+
+# Problem 37 - Speeding Up Motif Finding
+def get_failure_array(s):
+    failure_array = [0] * len(s)
+    longest_motif_length = 0 # this will store the length of the longest motif
+    for i in range(1, len(s)):
+        for j in range(1, len(s)-i+1):
+            if s[:i] == s[j:j+i]:
+                failure_array[j+i-1] = len(s[:i])
+                longest_motif_length = len(s[:i])
+
+        # If the length of the longest motif is less than the length of the current motif, break
+        if longest_motif_length < len(s[:i]):
+            break
+    return failure_array
+
+# Problem 38 - Finding a Shared Spliced Motif
+def find_shared_spliced_motif(dnas):
+    """
+    Finds the longest common motif shared by a list of DNA sequences after splicing out the introns.
+    Args:
+        dnas (list): A list of DNA sequences.
+    Returns:
+        str: A longest common subsequence of dna string (If more than one solution exists, you may return any one.)
+    """
+    s = dnas[0]
+    t = dnas[1]
+    lengths = [[0 for j in range(len(t) + 1)] for i in range(len(s) + 1)] # this will store the length of the longest common subsequence
+    #creates array of len(s) containing arrays of len(t) filled with 0
+    for i, x in enumerate(s): # enumerate s
+        for j, y in enumerate(t): # enumerate t
+            if x == y:
+                lengths[i + 1][j + 1] = lengths[i][j] + 1 # if the characters are equal, add 1 to the length of the longest common subsequence
+            else:
+                lengths[i + 1][j + 1] = max(lengths[i + 1][j], lengths[i][j + 1]) # if the characters are not equal, take the maximum of the length of the longest common subsequence
+    spliced_motif = ''
+    x, y = len(s), len(t)
+    while x * y != 0: # while length of s and t is not 0
+        if lengths[x][y] == lengths[x - 1][y]:
+            x -= 1 # if the length of s is not equal to the length of s - 1, decrease the length of s
+        elif lengths[x][y] == lengths[x][y - 1]:
+            y -= 1 # if the length of t is not equal to the length of t - 1, decrease the length of t
+        else:
+            spliced_motif = s[x - 1] + spliced_motif # if the length of s and t are equal, add the character to the spliced_motif
+            x -= 1 # decrease the length of s
+            y -= 1 # decrease the length of t
+    return spliced_motif
+
+# Problem 39 - Ordering Strings of Varying Length Lexicographically
+def order_strings_lexicographically(alphabet, n):
+    """
+    Orders all possible strings of varying length lexicographically.
+    Args:
+        alphabet (str): The alphabet to use for the strings.
+        n (int): The maximum length of the strings.
+    Returns:
+        list: A list of all possible strings of varying length lexicographically.
+    """
+    strings = []
+    for i in range(1, n + 1):
+        strings.extend(enumerate_kmers_lexicographically(alphabet, i))
+    # Sort according to the order of the original alphabet
+    strings.sort(key=lambda x: [alphabet.index(c) for c in x])
+    return strings
+
+# Problem 40 - Maximum Matchings and RNA Secondary Structures
+def maximum_matchings(rna):
+    """
+    Computes the number of maximum matchings in an RNA sequence.
+    Args:
+        rna (str): The input RNA sequence.
+    Returns:
+        int: The number of maximum matchings in the RNA sequence.
+    """
+    from math import factorial
+    au_mm = factorial(max(rna.count('A'), rna.count('U')))//factorial(abs(rna.count('A') - rna.count('U')))
+    gc_mm = factorial(max(rna.count('G'), rna.count('C')))//factorial(abs(rna.count('G') - rna.count('C')))
+    return au_mm * gc_mm
